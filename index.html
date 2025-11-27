@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Jogoinfantil</title>
+        <!-- Carregamento da fonte Quicksand (amigável para crianças) -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+        <!-- Dev helper: block known PostHog endpoints to avoid noisy timeouts from injected analytics
+             Remove this snippet in production or when debugging actual analytics. -->
+        <script>
+            (function(){
+                const blocked = [/posthog\.com/i, /us\.i\.posthog\.com/i];
+                const shouldBlock = (url)=> blocked.some(r=> r.test(url));
+
+                // patch fetch
+                if(window.fetch){
+                    const _fetch = window.fetch.bind(window);
+                    window.fetch = function(resource, init){
+                        try{
+                            const u = (typeof resource === 'string') ? resource : (resource && resource.url) || '';
+                            if(shouldBlock(u)){
+                                console.debug('[dev-block] blocked fetch to', u);
+                                return new Promise(()=>{}); // never resolves to mimic timeout-less blockage
+                            }
+                        }catch(e){/* ignore */}
+                        return _fetch(resource, init);
+                    };
+                }
+
+                // patch XMLHttpRequest
+                const _xhrOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url){
+                    try{
+                        if(shouldBlock(url)){
+                            console.debug('[dev-block] blocked XHR to', url);
+                            // set a flag so send() can noop
+                            this._dev_blocked = true;
+                        }
+                    }catch(e){/* ignore */}
+                    return _xhrOpen.apply(this, arguments);
+                };
+                const _xhrSend = XMLHttpRequest.prototype.send;
+                XMLHttpRequest.prototype.send = function(){
+                    if(this._dev_blocked){
+                        // no-op: prevent network call
+                        return;
+                    }
+                    return _xhrSend.apply(this, arguments);
+                };
+            })();
+        </script>
+        <style>
+            /* Reset CSS: Please avoid making changes here unless you know what you're doing :) */
+            *,
+            *::before,
+            *::after {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+    
+            html, body {
+                width: 100%;
+                height: 100%;
+            }
+    
+        body {
+            line-height: 1;
+            font-family: 'Quicksand', Arial, sans-serif;
+            background-color: #f5f7fb;
+        }            ol, ul {
+                list-style: none;
+            }
+    
+            img, video {
+                max-width: 100%;
+                height: auto;
+                display: block;
+            }
+    
+            a {
+                text-decoration: none;
+                color: inherit;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="game-container"></div>
+        <script src="./phaser.js"></script>
+        <script>
+            // Global fixMojibake: tenta corrigir textos corrompidos (UTF-8 mal decodificado)
+            window.fixMojibake = function(s){
+                if (typeof s !== 'string') return s;
+                try {
+                    let out = s;
+                    // Remoção de caracteres de substituição e controles invisíveis (preserva \n/\r/\t)
+                    out = out.replace(/\uFFFD/g, '')
+                             .replace(/[\u0000-\u001F]/g, (c) => (c === '\n' || c === '\r' || c === '\t') ? c : '');
+
+                    // Sinais e aspas comuns
+                    out = out.replace(/â€”/g, '—') // em dash
+                             .replace(/â€“/g, '–') // en dash
+                             .replace(/â€œ/g, '“')
+                             .replace(/â€|â€/g, '”')
+                             .replace(/â€˜/g, '‘')
+                             .replace(/â€™/g, '’')
+                             .replace(/â€¢/g, '•');
+
+                    // Acentos (pt-BR mais frequentes)
+                    out = out.replace(/Ã¡/g,'á').replace(/Ã¢/g,'â').replace(/Ã£/g,'ã').replace(/Ã¤/g,'ä')
+                             .replace(/Ã§/g,'ç').replace(/Ã©/g,'é').replace(/Ãª/g,'ê').replace(/Ã­/g,'í')
+                             .replace(/Ã³/g,'ó').replace(/Ã´/g,'ô').replace(/Ãµ/g,'õ').replace(/Ãº/g,'ú')
+                             .replace(/Ã¼/g,'ü').replace(/Ã±/g,'ñ')
+                             .replace(/Ã�/g,'Á').replace(/Ã‰/g,'É').replace(/Ã/g,'Í').replace(/Ã“/g,'Ó')
+                             .replace(/Ãš/g,'Ú').replace(/Ã‡/g,'Ç').replace(/Ã€/g,'À').replace(/Ã‚/g,'Â')
+                             .replace(/Ãƒ/g,'Ã').replace(/Ã•/g,'Õ').replace(/Ãœ/g,'Ü').replace(/Ãˆ/g,'È')
+                             .replace(/Ã™/g,'Ù');
+
+                    // Remover marcador "Â" residual muito comum
+                    out = out.replace(/Â/g, '');
+
+                    // Correções de emojis corrompidos comuns nestes arquivos
+                    out = out.replace(/dYZ%/g, '✨').replace(/dY\?\+/g, '🏅');
+
+                    return out;
+                } catch (_) {
+                    return s;
+                }
+            };
+
+            // Padroniza setText para sempre aplicar fixMojibake
+            (function(){
+                if (!window.Phaser || !Phaser.GameObjects || !Phaser.GameObjects.Text) return;
+                const orig = Phaser.GameObjects.Text.prototype.setText;
+                Phaser.GameObjects.Text.prototype.setText = function(value){
+                    const fm = window.fixMojibake || (x=>x);
+                    if (typeof value === 'string') value = fm(value);
+                    else if (Array.isArray(value)) value = value.map(v => (typeof v === 'string' ? fm(v) : v));
+                    return orig.call(this, value);
+                };
+            })();
+        </script>
+        <script type="module" src="./src/main.js"></script>
+    </body>
+    </html>

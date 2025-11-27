@@ -1,0 +1,6 @@
+@'
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+'@ | Set-Content -Encoding UTF8 .gitignore
