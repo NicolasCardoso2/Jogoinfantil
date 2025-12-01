@@ -4072,6 +4072,7 @@ setupAtividade9() {
   this._a9Order = ['CA','CE','CI','CO','CU'];
   this._a9Step  = 0;
   this._a9Lock  = false;
+  this._a9FirstTime = true; // flag para tocar áudio só na primeira vez
 
   // pool por família (usa os assets que você já carrega)
   this._a9Items = {
@@ -4203,7 +4204,11 @@ _a9RenderStep() {
   });
   this._a9Back = back;
   this.makeTitle('Sílaba certa para cada figura');
-  this.playTitleAudio(9);
+  // Só toca o áudio do título na primeira etapa
+  if (this._a9FirstTime) {
+    this.playTitleAudio(9);
+    this._a9FirstTime = false;
+  }
 
   // Criar botão de ajuda
   if (this._a9Help && !this._a9Help.destroyed) {
