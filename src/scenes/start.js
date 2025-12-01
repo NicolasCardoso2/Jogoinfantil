@@ -24,6 +24,8 @@ export default class StartScene extends Phaser.Scene {
     
     // Reset da flag de transição
     this._transitioning = false;
+    this._creditsModal = false;
+    this._creditsModalEls = null;
     
     // Música de fundo - garantir que só há uma instância
     if (this.musicaInicio) {
@@ -126,6 +128,26 @@ export default class StartScene extends Phaser.Scene {
         this._openingConfig = false;
       });
     });
+
+    // --- Selo "Protótipo" (canto inferior direito) ---
+    this._prototypeBadge = this.add.text(
+      W - 14,
+      H - 12,
+      'Protótipo acadêmico (TCC) - v0.9',
+      {
+        fontSize: '14px',
+        fontFamily: 'Arial Black',
+        color: '#ffffff',
+        backgroundColor: 'rgba(0,0,0,0.35)'
+      }
+    )
+      .setOrigin(1, 1)
+      .setDepth(6)
+      .setPadding(10, 6);
+
+    // --- Botão "Quem fez?" (canto inferior esquerdo) ---
+    const btnQuemFez = this.criarBotaoMini(130, H - 44, 'Quem fez?', '#FFC107').setDepth(6);
+    btnQuemFez.on('pointerdown', () => this.createCreditsModal());
   }
 
   // Botão estilo "pílula"
@@ -193,7 +215,44 @@ criarBotaoMenu(x, y, texto, corHex) {
   return container;
 }
 
+criarBotaoMini(x, y, texto, corHex) {
+  const L = 210, A = 52, R = 18;
+  const container = this.add.container(x, y);
 
+  const corBase = Phaser.Display.Color.HexStringToColor(corHex).color;
+  const corHover = Phaser.Display.Color.HexStringToColor(corHex).brighten(30).color;
+
+  const sombra = this.add.graphics();
+  sombra.fillStyle(0x000000, 0.22);
+  sombra.fillRoundedRect(-L / 2 + 3, -A / 2 + 4, L, A, R);
+
+  const bg = this.add.graphics();
+  const desenharBg = (c) => {
+    bg.clear();
+    bg.fillStyle(c, 1);
+    bg.fillRoundedRect(-L / 2, -A / 2, L, A, R);
+  };
+  desenharBg(corBase);
+
+  const label = this.add.text(0, 0, texto, {
+    fontSize: '20px',
+    fontFamily: 'Arial Black',
+    color: '#ffffff',
+    shadow: { offsetX: 0, offsetY: 2, color: 'rgba(0,0,0,0.45)', blur: 0, fill: true }
+  }).setOrigin(0.5);
+
+  container.add([sombra, bg, label]);
+  container.setSize(L, A);
+  container.setInteractive({ useHandCursor: true });
+
+  container.on('pointerover', () => desenharBg(corHover));
+  container.on('pointerout', () => desenharBg(corBase));
+  container.on('pointerdown', () => {
+    this.tweens.add({ targets: container, alpha: 0.85, duration: 70, yoyo: true, ease: 'Power2' });
+  });
+
+  return container;
+}
 
   // Entrada do pássaro: usa P_caindo, cai e depois troca para o papagaio acenando
   criarAnimacaoPassaro() {
@@ -269,6 +328,105 @@ montarPassaroAcenando(x, y) {
     yoyo: true,
     repeat: -1,
     ease: 'Sine.easeInOut'
+  });
+}
+
+createCreditsModal() {
+  if (this._creditsModal) return;
+  this._creditsModal = true;
+
+  const W = this.scale.width;
+  const H = this.scale.height;
+  const DEPTH = 1200;
+
+  const overlay = this.add
+    .rectangle(0, 0, W, H, 0x000000, 0.6)
+    .setOrigin(0, 0)
+    .setDepth(DEPTH)
+    .setInteractive({ useHandCursor: true });
+
+  const panelW = Math.min(650, W * 0.9);
+  const panelH = 340;
+  const px = (W - panelW) / 2;
+  const py = (H - panelH) / 2;
+
+  const painel = this.add.graphics().setDepth(DEPTH + 1);
+  painel.fillStyle(0xffffff, 0.98);
+  painel.fillRoundedRect(px, py, panelW, panelH, 24);
+  painel.lineStyle(3, 0x4caf50, 0.9);
+  painel.strokeRoundedRect(px, py, panelW, panelH, 24);
+
+  const header = this.add.graphics().setDepth(DEPTH + 2);
+  header.fillStyle(0x4caf50, 1);
+  header.fillRoundedRect(px, py, panelW, 70, { tl: 24, tr: 24, bl: 0, br: 0 });
+
+  const titulo = this.add.text(px + 24, py + 35, 'Quem fez este jogo?', {
+    fontSize: '30px',
+    fontFamily: 'Bobby Jones Soft, Arial, sans-serif',
+    color: '#ffffff',
+    fontStyle: 'bold'
+  }).setOrigin(0, 0.5).setDepth(DEPTH + 3);
+
+  const texto = [
+    'Autor: Nicolas Cardoso Vilha do Lago',
+    'Curso/Instituição: Eng. Software – Universidade do Contestado (UNC) – Mafra',
+    'Ano: 2025',
+    'Orientador: Élio Ribeiro Faria Junior',
+    'Versão do protótipo: v0.9'
+  ].join('\n');
+
+  const corpo = this.add.text(px + 24, py + 92, texto, {
+    fontSize: '20px',
+    fontFamily: 'Arial, sans-serif',
+    color: '#333333',
+    lineSpacing: 8,
+    wordWrap: { width: panelW - 48 }
+  }).setDepth(DEPTH + 3);
+
+  // Zona "blocker" para clicar dentro e NÃO fechar
+  const blocker = this.add
+    .zone(px + panelW / 2, py + panelH / 2, panelW, panelH)
+    .setDepth(DEPTH + 4)
+    .setInteractive();
+
+  blocker.on('pointerdown', (pointer, localX, localY, event) => {
+    if (event && event.stopPropagation) event.stopPropagation();
+  });
+
+  // Botão X
+  const closeCont = this.add.container(px + panelW - 36, py + 35).setDepth(DEPTH + 5);
+  const closeBg = this.add.circle(0, 0, 18, 0xffffff, 1).setStrokeStyle(3, 0x2f8eea, 0.8);
+  const closeX = this.add.text(0, 0, 'X', {
+    fontSize: '20px',
+    fontFamily: 'Arial Black',
+    color: '#333333'
+  }).setOrigin(0.5);
+
+  closeCont.add([closeBg, closeX]);
+  closeCont.setSize(36, 36);
+  closeCont.setInteractive({ useHandCursor: true });
+
+  this._creditsModalEls = [overlay, painel, header, titulo, corpo, blocker, closeCont];
+
+  const close = () => {
+    if (!this._creditsModal) return;
+    (this._creditsModalEls || []).forEach((el) => el && el.destroy && el.destroy());
+    this._creditsModalEls = null;
+    this._creditsModal = false;
+  };
+
+  overlay.on('pointerdown', close);     // clicar fora fecha
+  closeCont.on('pointerdown', close);   // X fecha
+
+  // Animação de entrada (leve)
+  overlay.setAlpha(0);
+  [painel, header, titulo, corpo, closeCont].forEach((o) => o.setAlpha && o.setAlpha(0));
+  this.tweens.add({ targets: overlay, alpha: 1, duration: 180, ease: 'Sine.easeOut' });
+  this.tweens.add({
+    targets: [painel, header, titulo, corpo, closeCont],
+    alpha: 1,
+    duration: 220,
+    ease: 'Sine.easeOut'
   });
 }
 
@@ -571,6 +729,13 @@ montarPassaroAcenando(x, y) {
     this._configModal = false;
     this._openingConfig = false;
     this._transitioning = false;
+    
+    // Limpar modal de créditos se estiver aberto
+    if (this._creditsModalEls) {
+      this._creditsModalEls.forEach(el => el && el.destroy && el.destroy());
+      this._creditsModalEls = null;
+    }
+    this._creditsModal = false;
     
     // Parar e destruir música completamente
     if (this.musicaInicio) {

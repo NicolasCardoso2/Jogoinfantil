@@ -70,6 +70,7 @@ const HELP_AUDIO_BASE = 'assets/sons/help/';
 const HELP_AUDIO_KEYS = [
   'help_a1_ache_figura_certa',
   'help_a2_que_silaba_comeca',
+  'help_a4_ache_intruso',
   'help_a4_nao_comeca_com',
   'help_a6_que_palavra_e_essa',
   'help_a7_monte_palavra',
@@ -547,8 +548,8 @@ export default class Fase4Atividades extends Phaser.Scene {
     // Container base
     this.activityContainer = this.add.container(0, 0);
 
-    // Música de fundo da fase
-    this.startBackgroundMusic();
+    // Música de fundo da fase - REMOVIDA
+    // this.startBackgroundMusic();
     
     // ✅ Cleanup global no SHUTDOWN (uma vez só)
     if (!this._boundGlobalShutdown) {
@@ -1286,18 +1287,32 @@ drawError(target, W, H, color = this.COLOR.DANGER) {
 markPermanentSuccess(target, W, H, color = this.COLOR.SUCCESS) {
   if (!target) return;
   
-  // Se já tem um halo permanente, não adiciona outro
-  if (target._permHalo) return;
+  // Remove halo antigo se existir
+  if (target._permHalo && !target._permHalo.destroyed) {
+    try { target._permHalo.destroy(); } catch(e) {}
+  }
   
   const halo = this.add.graphics();
   halo
-    .fillStyle(color, 0.08)
+    .fillStyle(color, 0.15) // mais visível
     .fillRoundedRect(-W/2, -H/2, W, H, 16)
-    .lineStyle(3, color, 0.9)
+    .lineStyle(4, color, 1) // borda mais forte
     .strokeRoundedRect(-W/2, -H/2, W, H, 16);
 
-  try { target.add(halo); } catch { halo.destroy(); return; }
-  target._permHalo = halo; // se um dia quiser remover manualmente
+  try { 
+    target.add(halo); 
+    // Marca especial para proteção
+    halo._isPermanentSuccess = true;
+    target._permHalo = halo;
+    target._hasSuccessMarking = true;
+    
+    // Força alpha máximo
+    halo.setAlpha(1.0);
+    target.setAlpha(1.0);
+  } catch { 
+    halo.destroy(); 
+    return; 
+  }
 }
 
   // =========================
@@ -1641,6 +1656,7 @@ markPermanentSuccess(target, W, H, color = this.COLOR.SUCCESS) {
 
   // guarda a cor original para o flashFaceColor voltar certinho
   face._lastColor = theme.base;
+  face._originalColor = theme.base; // backup adicional
 
     // highlight fininho na borda superior (sem "reflexo" falso)
     const bevel = this.add.graphics();
@@ -1811,6 +1827,23 @@ markPermanentSuccess(target, W, H, color = this.COLOR.SUCCESS) {
     // 4) Teardown específico da A9 e limpeza defensiva
     this.teardownA9?.();
     this.clearA9Artifacts?.();
+    
+    // 5) RESET ESPECÍFICO das atividades que não funcionam na segunda vez
+    this._a5Resolved = false;
+    this._a5ClickLock = false;
+    this._a9Resolved = false;
+    this._a9Eliminated = false;
+    this._a1Lock = false;
+    this._a4Resolved = false;  // "Que palavra é essa?"
+    this._a4ClickLock = false;
+    
+    // Reset de contadores e estados específicos
+    this.a4i = 0;      // reset "Que palavra é essa?"
+    this.a5i = 0;
+    this.a6Placed = 0; // reset "Separe FA/FO"
+    this.a9Index = 0;
+    this._a5FirstRound = true;
+    this._a9FirstRound = true;
   }
 
   showPlaceholder(n) {
@@ -2685,7 +2718,7 @@ renderA1() {
     this.addTutorialButton(
       a5Back,
       'Encontre a imagem que não combina com as outras.',
-      'help_a4_nao_comeca_com'
+      'help_a4_ache_intruso'
     );
     this.a5Rounds = [
       { alvo:'FO', itens:['foca','fogo','folha','fita'] },     // intruso: fita (FI)
@@ -2720,8 +2753,8 @@ renderA1() {
     this._a5FirstRound = false;
 
     this.queueAfterTitle(() => {
-      // frase fixa gravada em help_a4_nao_comeca_com.mp3
-      this.playHelpAudio('help_a4_nao_comeca_com');
+      // frase fixa gravada em help_a4_ache_intruso.mp3
+      this.playHelpAudio('help_a4_ache_intruso');
 
       // depois de ~2.2s, fala a sílaba alvo da rodada (ex.: "BO")
       this.time.delayedCall(2200, () => {
@@ -2812,7 +2845,7 @@ renderA1() {
           this.playSuccessSound();
           this.bumpEnergy(+1);
           this.tweens.add({ targets: node, scale: 1.06, duration: 120, yoyo: true });
-          this.drawCheck(node, cardW, cardH, this.COLOR.SUCCESS);
+          this.markPermanentSuccess(node, cardW, cardH, this.COLOR.SUCCESS);
 
           // avança só uma vez
           this.time.delayedCall(this.SUCCESS_DELAY, () => {
@@ -3036,10 +3069,16 @@ renderA1() {
           const dest = getSnap(zone);
           obj.disableInteractive();
 
-          // feedback e encaixe
-          this.drawCheck(obj, PIECE_W, PIECE_H, this.COLOR.SUCCESS);
+          // CORREÇÃO: marcação verde ANTES de mover/destruir
+          this.markPermanentSuccess(obj, PIECE_W, PIECE_H, this.COLOR.SUCCESS);
+          
+          // feedback sonoro
+          this.playSuccessSound?.();
+          this.bumpEnergy?.(+1);
+          
+          // encaixe com delay maior para ver o verde
           this.tweens.add({ targets: obj, x: dest.x, y: dest.y, scale: 0.95, duration: 220, ease: 'Quad.easeOut' });
-          this.tweens.add({ targets: obj, alpha: 0, duration: 220, delay: 140, onComplete: () => { try{ obj.destroy(); }catch(e){} } });
+          this.tweens.add({ targets: obj, alpha: 0, duration: 220, delay: 800, onComplete: () => { try{ obj.destroy(); }catch(e){} } }); // delay aumentado de 140 para 800ms
 
           // ✅ FIX: não tweene 'tint' em Graphics — redesenha a borda e depois restaura
           setBorder(zone, this.COLOR.SUCCESS, 4, 1);
@@ -4495,7 +4534,7 @@ _a9RenderStep() {
     if (!btn?._face) return;
     const W = btn._W, H = btn._H, R = btn._R;
     const face = btn._face;
-    const back = face._lastColor || this.COLOR.PRIMARY;
+    const back = face._lastColor || face._originalColor || 0x0EA5E9;
 
     face.clear();
     face.fillStyle(color, 1)

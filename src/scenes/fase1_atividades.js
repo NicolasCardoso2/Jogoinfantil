@@ -113,6 +113,7 @@ const HELP_AUDIO_BASE = 'assets/sons/help/';
 const HELP_AUDIO_KEYS = [
   'help_a1_ache_figura_certa',
   'help_a2_que_silaba_comeca',
+  'help_a4_ache_intruso',
   'help_a4_nao_comeca_com',
   'help_a6_que_palavra_e_essa',
   'help_a7_monte_palavra',
@@ -603,8 +604,8 @@ export default class Fase1Atividades extends Phaser.Scene {
     // Container base
     this.activityContainer = this.add.container(0, 0);
 
-    // Música de fundo da fase
-    this.startBackgroundMusic();
+    // Música de fundo da fase - REMOVIDA
+    // this.startBackgroundMusic();
     
     // ✅ Cleanup global no SHUTDOWN (uma vez só)
     if (!this._boundGlobalShutdown) {
@@ -1342,18 +1343,32 @@ drawError(target, W, H, color = this.COLOR.DANGER) {
 markPermanentSuccess(target, W, H, color = this.COLOR.SUCCESS) {
   if (!target) return;
   
-  // Se já tem um halo permanente, não adiciona outro
-  if (target._permHalo) return;
+  // Remove halo antigo se existir
+  if (target._permHalo && !target._permHalo.destroyed) {
+    try { target._permHalo.destroy(); } catch(e) {}
+  }
   
   const halo = this.add.graphics();
   halo
-    .fillStyle(color, 0.08)
+    .fillStyle(color, 0.15) // mais visível
     .fillRoundedRect(-W/2, -H/2, W, H, 16)
-    .lineStyle(3, color, 0.9)
+    .lineStyle(4, color, 1) // borda mais forte
     .strokeRoundedRect(-W/2, -H/2, W, H, 16);
 
-  try { target.add(halo); } catch { halo.destroy(); return; }
-  target._permHalo = halo; // se um dia quiser remover manualmente
+  try { 
+    target.add(halo); 
+    // Marca especial para proteção
+    halo._isPermanentSuccess = true;
+    target._permHalo = halo;
+    target._hasSuccessMarking = true;
+    
+    // Força alpha máximo
+    halo.setAlpha(1.0);
+    target.setAlpha(1.0);
+  } catch { 
+    halo.destroy(); 
+    return; 
+  }
 }
 
   // =========================
@@ -1868,6 +1883,19 @@ markPermanentSuccess(target, W, H, color = this.COLOR.SUCCESS) {
     // 4) Teardown específico da A9 e limpeza defensiva
     this.teardownA9?.();
     this.clearA9Artifacts?.();
+    
+    // 5) Reset específico das atividades que não funcionam na segunda vez
+    this._a5Resolved = false;
+    this._a5ClickLock = false;
+    this._a9Resolved = false;
+    this._a9Eliminated = false;
+    this._a1Lock = false;
+    
+    // Reset de contadores e estados específicos
+    this.a5i = 0;
+    this.a9Index = 0;
+    this._a5FirstRound = true;
+    this._a9FirstRound = true;
   }
 
   showPlaceholder(n) {
@@ -2762,7 +2790,7 @@ renderA1() {
     this.addTutorialButton(
       a5Back,
       'Encontre a imagem que não combina com as outras.',
-      'help_a4_nao_comeca_com'
+      'help_a4_ache_intruso'
     );
     this.a5Rounds = [
       { alvo:'BO', itens:['boia','bola','bota','bebe'] },    // intruso: bebe
@@ -2797,8 +2825,8 @@ renderA1() {
     this._a5FirstRound = false;
 
     this.queueAfterTitle(() => {
-      // frase fixa gravada em help_a4_nao_comeca_com.mp3
-      this.playHelpAudio('help_a4_nao_comeca_com');
+      // frase fixa gravada em help_a4_ache_intruso.mp3
+      this.playHelpAudio('help_a4_ache_intruso');
 
       // depois de ~2.2s, fala a sílaba alvo da rodada (ex.: "BO")
       this.time.delayedCall(2200, () => {
@@ -2808,6 +2836,7 @@ renderA1() {
       });
     }, delay);
 
+    // RESET CRÍTICO: garante que a atividade funciona na segunda vez
     this._a5Resolved = false;
     this._a5ClickLock = false;
 
@@ -2889,7 +2918,8 @@ renderA1() {
           this.playSuccessSound();
           this.bumpEnergy(+1);
           this.tweens.add({ targets: node, scale: 1.06, duration: 120, yoyo: true });
-          this.drawCheck(node, cardW, cardH, this.COLOR.SUCCESS);
+          // Usar marcação permanente em vez de temporária
+          this.markPermanentSuccess(node, cardW, cardH, this.COLOR.SUCCESS);
 
           // avança só uma vez
           this.time.delayedCall(this.SUCCESS_DELAY, () => {
@@ -3843,8 +3873,9 @@ renderA8Round() {
     this.playWordAudio(r.correct);
   }, delay);
 
-  // libera o lock sempre que começa uma nova palavra
+  // RESET CRÍTICO: libera todos os locks sempre que começa uma nova palavra
   this._a1Lock = false;
+  this._a9ClickLock = false;
 
   this._a9Resolved = false;
   this._a9Eliminated = false;
@@ -3920,7 +3951,8 @@ renderA8Round() {
         this.playSuccessSound();
         this.bumpEnergy(+1);
         this.tweens.add({ targets: card, scale: 1.06, duration: 120, yoyo: true });
-        this.drawCheck(card, cardW, cardH, this.COLOR.SUCCESS);
+        // Usar marcação permanente em vez de temporária
+        this.markPermanentSuccess(card, cardW, cardH, this.COLOR.SUCCESS);
         this.time.delayedCall(this.SUCCESS_DELAY, () => {
           this.transitionStep('a9C', () => {
             this.a9Index++;
