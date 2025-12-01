@@ -3807,10 +3807,24 @@ renderA8Round() {
   this.makeTitle('Ache a figura certa');
     this.playTitleAudio(1);
 
-    this.addTutorialButton(
+    // Botão de help customizado para atividade 1 (ache a figura certa)
+    this.a9HelpButton = this.addTutorialButtonCustom(
       a9Back,
       'Escute a palavra falada e toque na imagem correspondente.',
-      'help_a1_ache_figura_certa'
+      () => {
+        // Primeiro toca o help genérico
+        this.playHelpAudio('help_a1_ache_figura_certa');
+        
+        // Depois de 9 segundos, toca a palavra da rodada atual
+        this.time.delayedCall(9000, () => {
+          if (this.a9Rounds && this.a9Index < this.a9Rounds.length) {
+            const currentRound = this.a9Rounds[this.a9Index];
+            if (currentRound && currentRound.word) {
+              this.playWordAudio(currentRound.word);
+            }
+          }
+        });
+      }
     );
 
     this.a9Rounds = [
@@ -4994,6 +5008,59 @@ _a9RenderStep() {
         // marca que esse help veio de clique do usuário
         this._helpFromUserClick = true;
         this.playHelpAudio(hintAudioKey);
+        this._helpFromUserClick = false;
+      }
+    });
+
+    this.activityContainer.add(cont);
+    return cont;
+  }
+
+  addTutorialButtonCustom(backdrop, hintText, customCallback) {
+    // canto superior direito da placa branca
+    const x = backdrop.x + backdrop.w - 80;
+    const y = backdrop.yTop + 60;
+
+    const cont = this.add.container(x, y);
+
+    const icon = this.add.image(0, 0, 'icon_ajuda');
+
+    // ajustar escala para algo em torno de 150px (bem maior e sem sombra)
+    try {
+      const tex = this.textures.get('icon_ajuda').getSourceImage();
+      const maxSize = 150;
+      const s = Math.min(maxSize / tex.width, maxSize / tex.height);
+      icon.setScale(s);
+    } catch (e) {}
+
+    cont.add([icon]);
+    cont.setSize(150, 150);
+    cont.setInteractive({ useHandCursor: true });
+
+    cont.on('pointerover', () => {
+      this.tweens.add({ targets: cont, duration: 100, scale: 1.06 });
+    });
+
+    cont.on('pointerout', () => {
+      this.tweens.add({ targets: cont, duration: 100, scale: 1.0 });
+    });
+
+    cont.on('pointerdown', () => {
+      if (this.startInputCooldown && this.startInputCooldown(260)) return;
+
+      this.tweens.add({
+        targets: cont,
+        scaleX: 0.96,
+        scaleY: 0.96,
+        duration: 90,
+        yoyo: true
+      });
+      this.playClickSound?.();
+      
+      if (customCallback && typeof customCallback === 'function') {
+        // marca que esse help veio de clique do usuário
+        this._helpFromUserClick = true;
+        customCallback();
         this._helpFromUserClick = false;
       }
     });
