@@ -2753,8 +2753,8 @@ renderA1() {
     this._a5FirstRound = false;
 
     this.queueAfterTitle(() => {
-      // frase fixa gravada em help_a4_ache_intruso.mp3
-      this.playHelpAudio('help_a4_ache_intruso');
+      // frase fixa gravada em help_a4_nao_comeca_com.mp3
+      this.playHelpAudio('help_a4_nao_comeca_com');
 
       // depois de ~2.2s, fala a sílaba alvo da rodada (ex.: "BO")
       this.time.delayedCall(2200, () => {
